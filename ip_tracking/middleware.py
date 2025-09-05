@@ -1,6 +1,5 @@
-from .models import RequestLog, BlockedIP
-from django.core.exceptions import PermissionDenied
-import datetime, requests, os
+from django.http import JsonResponse
+from .utils import handle_request_log
 
 class CustomIpTrackingMiddleware:
     def __init__(self, get_response):
@@ -15,24 +14,13 @@ class CustomIpTrackingMiddleware:
             ip_address = ip_address.split(',')[0].strip()  # First IP in list
         else:
             ip_address = request.META.get('REMOTE_ADDR')
-
-        path = request.path
-        date = datetime.datetime.today()
         if not ip_address:
-            raise PermissionDenied
-        API_KEY = os.environ.get("IPGEOLOCATION_IO_API_KEY")
-        # IP_ADDR = ip_address
-        URL = f"https://api.ipgeolocation.io/v2/ipgeo?apiKey={API_KEY}&ip=8.8.8.8&fields=location.country_name,location.city"
-        headers = {}
-        request_ip_geo = requests.get(url=URL, headers=headers, data={})
-        data = request_ip_geo.json()
-        print(data)
-
-        log = RequestLog.objects.create(ip_address=ip_address, path=path, timestamp=date, country=data['location']['country_name'].title(), city=data['location']['city'].title())
-
-        if BlockedIP.objects.filter(request_log=log).exists():
-            raise PermissionDenied
-        response = self.get_response(request)
-
+            return JsonResponse({"error": "Forbidden"}, status=403)
+        
+        response = handle_request_log(ip_address="8.8.8.8", path=request.path)
+        if response is None:
+            response = self.get_response(request)
+        
         """Code to be executed for each request/response after the view is called."""
         return response
+     
